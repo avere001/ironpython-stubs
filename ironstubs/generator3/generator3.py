@@ -155,43 +155,37 @@ def list_binaries(paths):
 
 
 def list_sources(paths, target_path):
-    #noinspection PyBroadException
-    try:
-        for path in paths:
-            if path == os.path.dirname(sys.argv[0]): continue
+    for path in paths:
+        if path == os.path.dirname(sys.argv[0]): continue
 
-            path = os.path.normpath(path)
+        path = os.path.normpath(path)
 
-            target_dir_path = ''
-            extra_info = ''
+        target_dir_path = ''
+        extra_info = ''
 
-            if path.endswith('.egg') and os.path.isfile(path):
-                if target_path is not None:
-                    extra_info = '\t' + os.path.basename(path)
-                say("%s\t%s\t%d%s", path, path, os.path.getsize(path), extra_info)
-            else:
-                target_dir_path = compute_path_hash(path)
-                if target_path is not None:
-                    extra_info = '\t' + target_dir_path
+        if path.endswith('.egg') and os.path.isfile(path):
+            if target_path is not None:
+                extra_info = '\t' + os.path.basename(path)
+            say("%s\t%s\t%d%s", path, path, os.path.getsize(path), extra_info)
+        else:
+            target_dir_path = compute_path_hash(path)
+            if target_path is not None:
+                extra_info = '\t' + target_dir_path
 
-            for root, files in walk_python_path(path):
-                for name in files:
-                    if name.endswith('.py'):
-                        file_path = os.path.join(root, name)
-                        if target_path is not None:
-                            relpath = os.path.relpath(root, path)
-                            folder_path = os.path.join(target_path, target_dir_path, relpath)
-                            if not os.path.exists(folder_path):
-                                os.makedirs(folder_path)
-                            shutil.copyfile(file_path, os.path.join(folder_path, name))
-                        say("%s\t%s\t%d%s", os.path.normpath(file_path), path, os.path.getsize(file_path), extra_info)
-        say('END')
-        sys.stdout.flush()
-    except:
-        import traceback
+        for root, files in walk_python_path(path):
+            for name in files:
+                if name.endswith('.py'):
+                    file_path = os.path.join(root, name)
+                    if target_path is not None:
+                        relpath = os.path.relpath(root, path)
+                        folder_path = os.path.join(target_path, target_dir_path, relpath)
+                        if not os.path.exists(folder_path):
+                            os.makedirs(folder_path)
+                        shutil.copyfile(file_path, os.path.join(folder_path, name))
+                    say("%s\t%s\t%d%s", os.path.normpath(file_path), path, os.path.getsize(file_path), extra_info)
+    say('END')
+    sys.stdout.flush()
 
-        traceback.print_exc()
-        sys.exit(1)
 
 def compute_path_hash(path):
     # computes hash string of provided path
@@ -265,67 +259,55 @@ def process_one(name, mod_file_name, doing_builtins, subdir, quiet=False):
         sys.stdout.flush()
     action("doing nothing")
 
-    try:
-        fname = build_output_name(subdir, name)
-        action("opening %r", fname)
-        old_modules = list(sys.modules.keys())
-        imported_module_names = []
 
-        class MyFinder:
-            #noinspection PyMethodMayBeStatic
-            def find_module(self, fullname, path=None):
-                if fullname != name:
-                    imported_module_names.append(fullname)
-                return None
+    fname = build_output_name(subdir, name)
+    action("opening %r", fname)
+    old_modules = list(sys.modules.keys())
+    imported_module_names = []
 
-        my_finder = None
-        if hasattr(sys, 'meta_path'):
-            my_finder = MyFinder()
-            sys.meta_path.append(my_finder)
-        else:
-            imported_module_names = None
+    class MyFinder:
+        #noinspection PyMethodMayBeStatic
+        def find_module(self, fullname, path=None):
+            if fullname != name:
+                imported_module_names.append(fullname)
+            return None
 
-        action("importing")
-        __import__(name) # sys.modules will fill up with what we want
+    my_finder = None
+    if hasattr(sys, 'meta_path'):
+        my_finder = MyFinder()
+        sys.meta_path.append(my_finder)
+    else:
+        imported_module_names = None
 
-        if my_finder:
-            sys.meta_path.remove(my_finder)
-        if imported_module_names is None:
-            imported_module_names = [m for m in sys.modules.keys() if m not in old_modules]
+    action("importing")
+    __import__(name) # sys.modules will fill up with what we want
 
-        redo_module(name, fname, mod_file_name, doing_builtins)
-        # The C library may have called Py_InitModule() multiple times to define several modules (gtk._gtk and gtk.gdk);
-        # restore all of them
-        path = name.split(".")
-        redo_imports = not ".".join(path[:-1]) in MODULES_INSPECT_DIR
-        if imported_module_names and redo_imports:
-            for m in sys.modules.keys():
-                if m.startswith("pycharm_generator_utils"): continue
-                action("looking at possible submodule %r", m)
-                # if module has __file__ defined, it has Python source code and doesn't need a skeleton
-                if m not in old_modules and m not in imported_module_names and m != name and not hasattr(
-                        sys.modules[m], '__file__'):
-                    if not quiet:
-                        say(m)
-                        sys.stdout.flush()
-                    fname = build_output_name(subdir, m)
-                    action("opening %r", fname)
-                    try:
-                        redo_module(m, fname, mod_file_name, doing_builtins)
-                    finally:
-                        action("closing %r", fname)
-    except:
-        exctype, value = sys.exc_info()[:2]
-        import pdb; pdb.set_trace()
-        msg = "Failed to process %r while %s: %s"
-        args = name, CURRENT_ACTION, str(value)
-        report(msg, *args)
-        if debug_mode:
-            if sys.platform == 'cli':
-                import traceback
-                traceback.print_exc(file=sys.stderr)
-            raise
-        return False
+    if my_finder:
+        sys.meta_path.remove(my_finder)
+    if imported_module_names is None:
+        imported_module_names = [m for m in sys.modules.keys() if m not in old_modules]
+
+    redo_module(name, fname, mod_file_name, doing_builtins)
+    # The C library may have called Py_InitModule() multiple times to define several modules (gtk._gtk and gtk.gdk);
+    # restore all of them
+    path = name.split(".")
+    redo_imports = not ".".join(path[:-1]) in MODULES_INSPECT_DIR
+    if imported_module_names and redo_imports:
+        for m in sys.modules.keys():
+            if m.startswith("pycharm_generator_utils"): continue
+            action("looking at possible submodule %r", m)
+            # if module has __file__ defined, it has Python source code and doesn't need a skeleton
+            if m not in old_modules and m not in imported_module_names and m != name and not hasattr(
+                    sys.modules[m], '__file__'):
+                if not quiet:
+                    say(m)
+                    sys.stdout.flush()
+                fname = build_output_name(subdir, m)
+                action("opening %r", fname)
+                try:
+                    redo_module(m, fname, mod_file_name, doing_builtins)
+                finally:
+                    action("closing %r", fname)
     return True
 
 
