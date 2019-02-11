@@ -88,6 +88,8 @@ def crawl_loaded_references(target_assembly_name):
         if assembly_name == target_assembly_name:
             logger.info('Parsing Assembly: {}'.format(assembly_name))
             namespaces_dict[assembly_filename] = iter_module(assembly_name, assembly)
+        elif assembly_name.lower() == target_assembly_name.lower():
+            print "WARNING: {} is a different case than {} -- SKIPPING".format(assembly_name, target_assembly_name) 
         else:
             logger.debug('Assembly Skiped. Not in target list: {}'.format(assembly_name))
     return namespaces_dict
